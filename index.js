@@ -8,73 +8,89 @@ const Get = Method('get');
 const Post = Method('post');
 
 const Path = (regExp) => (req) => {
-    const url = new URL(req.url);
-    const path = url.pathname;
-    return path.match(regExp) && path.match(regExp)[0] === path;
+	const url = new URL(req.url);
+	const path = url.pathname;
+	return path.match(regExp) && path.match(regExp)[0] === path;
 };
+
+/*
+ * The regex to get the bot_token and api_method from request URL
+ * as the first and second backreference respectively.
+ */
+const URL_PATH_REGEX = /^\/bot(?<bot_token>[^/]+)\/(?<api_method>[a-z]+)/i;
 
 /**
  * Router handles the logic of what handler is matched given conditions
  * for each request
  */
 class Router {
-    constructor() {
-        this.routes = [];
-    }
+	constructor() {
+		this.routes = [];
+	}
 
-    handle(conditions, handler) {
-        this.routes.push({
-            conditions,
-            handler,
-        });
-        return this;
-    }
+	handle(conditions, handler) {
+		this.routes.push({
+			conditions,
+			handler,
+		});
+		return this;
+	}
 
-    get(url, handler) {
-        return this.handle([Get, Path(url)], handler);
-    }
+	get(url, handler) {
+		return this.handle([Get, Path(url)], handler);
+	}
 
-    post(url, handler) {
-        return this.handle([Post, Path(url)], handler);
-    }
+	post(url, handler) {
+		return this.handle([Post, Path(url)], handler);
+	}
 
-    all(handler) {
-        return this.handler([], handler);
-    }
+	all(handler) {
+		return this.handler([], handler);
+	}
 
-    route(req) {
-        const route = this.resolve(req);
+	route(req) {
+		const route = this.resolve(req);
 
-        if (route) {
-            return route.handler(req);
-        }
+		if (route) {
+			return route.handler(req);
+		}
 
-        return new Response('No matching route found', {
-            status: 404,
-            statusText: 'Not found',
-            headers: {
-                'content-type': 'text/plain',
-            },
-        });
-    }
+		const description = 'No matching route found';
+		const error_code = 404;
+
+		return new Response(
+			JSON.stringify({
+				ok: false,
+				error_code,
+				description,
+			}),
+			{
+				status: error_code,
+				statusText: description,
+				headers: {
+					'content-type': 'application/json',
+				},
+			}
+		);
+	}
 
 	/**
 	 * It returns the matching route that returns true
 	 * for all the conditions if any.
 	 */
-    resolve(req) {
-        return this.routes.find((r) => {
-            if (!r.conditions || (Array.isArray(r) && !r.conditions.length)) {
-                return true;
-            }
+	resolve(req) {
+		return this.routes.find((r) => {
+			if (!r.conditions || (Array.isArray(r) && !r.conditions.length)) {
+				return true;
+			}
 
-            if (typeof r.conditions === 'function') {
-                return r.conditions(req);
-            }
+			if (typeof r.conditions === 'function') {
+				return r.conditions(req);
+			}
 
-            return r.conditions.every((c) => c(req));
-        });
-    }
+			return r.conditions.every((c) => c(req));
+		});
+	}
 }
 
 /**
@@ -82,29 +98,28 @@ class Router {
  * and reads in the response body.
  * @param {Request} request the incoming request
  */
-async function handler({ url, ...request }) {
+async function handler(request) {
+	// Extract the URl method from the request.
+	const { url, ..._request } = request;
 
-    // Get the response from API.
-    const response = await fetch(buildApiUrl(url), request);
-    const result = await response.text();
+	const path = new URL(url).pathname;
 
-    return new Response(result, request);
-}
+	// Leave the first match as we are interested only in backreferences.
+	const { bot_token, api_method } = path.match(URL_PATH_REGEX).groups;
 
-/**
- * Builds the URL for Telegram Bot API.
- * @param {string} The API URL.
- */
-function buildApiUrl(requestUrl) {
-    /**
-     * The regex to get the bot_token and api_method
-     * as the first and second backreference respectively.
-     */
-    const url_regex = /^.+?\/bot(.+)\/(.+)/;
-    // Leave the first match as we are interested only in backreferences.
-    const [, bot_token, api_method] = requestUrl.match(url_regex);
-    // Build the URL.
-    return `https://api.telegram.org/bot${bot_token}/${api_method}`;
+	// Build the URL
+	const api_url = 'https://api.telegram.org/bot' + bot_token + '/' + api_method;
+
+	// Get the response from API.
+	const response = await fetch(api_url, _request);
+
+	const result = await response.text();
+
+	const res = new Response(result, _request);
+
+	res.headers.set('Content-Type', 'application/json');
+
+	return res;
 }
 
 /**
@@ -112,17 +127,17 @@ function buildApiUrl(requestUrl) {
  * @param {Request} request the incoming request.
  */
 async function handleRequest(request) {
-    const r = new Router();
-    r.get('.*/bot(.+)/.+', (req) => handler(req));
-    r.post('.*/bot(.+)/.+', (req) => handler(req));
+	const r = new Router();
+	r.get(URL_PATH_REGEX, (req) => handler(req));
+	r.post(URL_PATH_REGEX, (req) => handler(req));
 
-    const resp = await r.route(request);
-    return resp;
+	const resp = await r.route(request);
+	return resp;
 }
 
 /**
  * Hook into the fetch event.
  */
 addEventListener('fetch', (event) => {
-    event.respondWith(handleRequest(event.request));
+	event.respondWith(handleRequest(event.request));
 });
