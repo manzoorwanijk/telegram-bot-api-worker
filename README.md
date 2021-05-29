@@ -10,10 +10,13 @@ You can use this script to create a CloudFlare Worker to send requests to Telegr
 - You will be asked to create a Workers subdomain. Enter the subdomain you want.
 - Create a Worker or Edit if you have already created one.
 - Set a short name for your worker to shorten the URL a bit.
-- Copy the code from [dist/main.js](https://github.com/manzoorwanijk/telegram-bot-api-worker/raw/master/dist/main.js) or [index.js](https://github.com/manzoorwanijk/telegram-bot-api-worker/raw/master/index.js) and paste into the Editor given on the Create Worker page.
+- Copy the code from [index.js](https://github.com/manzoorwanijk/telegram-bot-api-worker/raw/master/index.js) and paste into the Editor given on the Create Worker page.
 - *Save and Deploy*
 
-## How to Use
+## How to use in WP Telegram plugins
+After you deploy the Worker, simply copy the worker URL and paste in plugin settings. The URL may look like this <br /> `https://my-worker.mysubdomain.workers.dev`
+
+## How to use outside WP Telegram
 After you deploy the Worker, simply use the worker URL in place of the Telegram Bot API URL. If your worker URL is `https://my-worker.mysubdomain.workers.dev`, then replace `https://api.telegram.org` in the Bot API URL.
 
 So,
