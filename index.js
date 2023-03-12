@@ -58,20 +58,13 @@ class Router {
 		const description = 'No matching route found';
 		const error_code = 404;
 
-		return new Response(
-			JSON.stringify({
-				ok: false,
-				error_code,
-				description,
-			}),
-			{
-				status: error_code,
-				statusText: description,
-				headers: {
-					'content-type': 'application/json',
-				},
-			}
-		);
+		return new Response(JSON.stringify({ ok: false, error_code, description }), {
+			status: error_code,
+			statusText: description,
+			headers: {
+				'content-type': 'application/json',
+			},
+		});
 	}
 
 	/**
@@ -98,7 +91,7 @@ class Router {
  * and reads in the response body.
  * @param {Request} request the incoming request
  */
-async function handler(request) {
+async function handleTelegramRequest(request) {
 	// Extract the URl method from the request.
 	const { url, ..._request } = request;
 
@@ -123,13 +116,29 @@ async function handler(request) {
 }
 
 /**
+ * Handles the request to the root
+ */
+async function handleRootRequest() {
+	const result = 'Everything looks good! You are ready to use your CloudFlare worker.';
+
+	return new Response(JSON.stringify({ ok: true, result }), {
+		status: 200,
+		statusText: result,
+		headers: {
+			'content-type': 'application/json',
+		},
+	});
+}
+
+/**
  * Handles the incoming request.
  * @param {Request} request the incoming request.
  */
 async function handleRequest(request) {
 	const r = new Router();
-	r.get(URL_PATH_REGEX, (req) => handler(req));
-	r.post(URL_PATH_REGEX, (req) => handler(req));
+	r.get('/', handleRootRequest);
+	r.get(URL_PATH_REGEX, (req) => handleTelegramRequest(req));
+	r.post(URL_PATH_REGEX, (req) => handleTelegramRequest(req));
 
 	const resp = await r.route(request);
 	return resp;
