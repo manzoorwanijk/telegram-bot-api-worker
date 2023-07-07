@@ -27,7 +27,7 @@
 
     ![image](image-6.png)
 
--   Copy the code from [index.js](../index.js) and paste into the code editor.
+-   Copy the code from [index.js](https://github.com/manzoorwanijk/telegram-bot-api-worker/raw/master/index.js) and paste into the code editor.
 
 -   Ensure that you have pasted the code correctly and click on "Save and deploy" and confirm the deployment.
 
