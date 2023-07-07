@@ -1,18 +1,3 @@
-/**
- * Helper functions to check if the request uses
- * corresponding method.
- *
- */
-const Method = (method) => (req) => req.method.toLowerCase() === method.toLowerCase();
-const Get = Method('get');
-const Post = Method('post');
-
-const Path = (regExp) => (req) => {
-	const url = new URL(req.url);
-	const path = url.pathname;
-	return path.match(regExp) && path.match(regExp)[0] === path;
-};
-
 /*
  * The regex to get the bot_token and api_method from request URL
  * as the first and second backreference respectively.
@@ -20,105 +5,29 @@ const Path = (regExp) => (req) => {
 const URL_PATH_REGEX = /^\/bot(?<bot_token>[^/]+)\/(?<api_method>[a-z]+)/i;
 
 /**
- * Router handles the logic of what handler is matched given conditions
- * for each request
- */
-class Router {
-	constructor() {
-		this.routes = [];
-	}
-
-	handle(conditions, handler) {
-		this.routes.push({
-			conditions,
-			handler,
-		});
-		return this;
-	}
-
-	get(url, handler) {
-		return this.handle([Get, Path(url)], handler);
-	}
-
-	post(url, handler) {
-		return this.handle([Post, Path(url)], handler);
-	}
-
-	all(handler) {
-		return this.handler([], handler);
-	}
-
-	route(req) {
-		const route = this.resolve(req);
-
-		if (route) {
-			return route.handler(req);
-		}
-
-		const description = 'No matching route found';
-		const error_code = 404;
-
-		return new Response(JSON.stringify({ ok: false, error_code, description }), {
-			status: error_code,
-			statusText: description,
-			headers: {
-				'content-type': 'application/json',
-			},
-		});
-	}
-
-	/**
-	 * It returns the matching route that returns true
-	 * for all the conditions if any.
-	 */
-	resolve(req) {
-		return this.routes.find((r) => {
-			if (!r.conditions || (Array.isArray(r) && !r.conditions.length)) {
-				return true;
-			}
-
-			if (typeof r.conditions === 'function') {
-				return r.conditions(req);
-			}
-
-			return r.conditions.every((c) => c(req));
-		});
-	}
-}
-
-/**
  * Sends a POST request with JSON data to Telegram Bot API
  * and reads in the response body.
  * @param {Request} request the incoming request
  */
 async function handleTelegramRequest(request) {
-	// Extract the URl method from the request.
-	const { url, ..._request } = request;
+	const url = new URL(request.url);
 
-	const { pathname: path, search } = new URL(url);
+	// point the URL to Telegram Bot API
+	url.hostname = 'api.telegram.org';
 
-	// Leave the first match as we are interested only in backreferences.
-	const { bot_token, api_method } = path.match(URL_PATH_REGEX).groups;
-
-	// Build the URL
-	const api_url = 'https://api.telegram.org/bot' + bot_token + '/' + api_method + search;
+	// create a new request with the modified URL
+	const newRequest = new Request(url.toString(), request);
 
 	// Get the response from API.
-	const response = await fetch(api_url, _request);
+	const response = await fetch(newRequest);
 
-	const result = await response.text();
-
-	const res = new Response(result, _request);
-
-	res.headers.set('Content-Type', 'application/json');
-
-	return res;
+	return response;
 }
 
 /**
  * Handles the request to the root
  */
-async function handleRootRequest() {
+function handleRootRequest() {
 	const result = 'Everything looks good! You are ready to use your CloudFlare worker.';
 
 	return new Response(JSON.stringify({ ok: true, result }), {
@@ -131,17 +40,37 @@ async function handleRootRequest() {
 }
 
 /**
+ * Handles the 404 request
+ */
+async function handle404Request() {
+	const description = 'No matching route found';
+	const error_code = 404;
+
+	return new Response(JSON.stringify({ ok: false, error_code, description }), {
+		status: error_code,
+		statusText: description,
+		headers: {
+			'content-type': 'application/json',
+		},
+	});
+}
+
+/**
  * Handles the incoming request.
  * @param {Request} request the incoming request.
  */
 async function handleRequest(request) {
-	const r = new Router();
-	r.get('/', handleRootRequest);
-	r.get(URL_PATH_REGEX, (req) => handleTelegramRequest(req));
-	r.post(URL_PATH_REGEX, (req) => handleTelegramRequest(req));
+	const { pathname } = new URL(request.url);
 
-	const resp = await r.route(request);
-	return resp;
+	if (URL_PATH_REGEX.test(pathname)) {
+		return await handleTelegramRequest(request);
+	}
+
+	if (pathname === '/') {
+		return handleRootRequest();
+	}
+
+	return handle404Request();
 }
 
 /**
